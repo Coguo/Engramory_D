@@ -1,5 +1,3 @@
-[English](README.md) | **简体中文**
-
 # Engramory_D — 双层记忆模型增强版
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)      [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
@@ -8,6 +6,8 @@
 
 > **原项目**:[Engramory (tinqiao-oss/engramory)](https://github.com/tinqiao-oss/engramory)
 > 本仓库是从原版复制后**重新搭建的独立项目**,在原版 0.5.0 基础上新增 0.6.0 全局记忆库与 0.6.1 两层模型收敛。
+
+> **⚠️ 声明:本项目仅供个人学习、研究使用，非商业项目，不用于任何商业用途。**
 
 - 记忆 = 一堆小小的、人能直接读的 markdown 文件 + 一个每次会话都加载的索引(`MEMORY.md`)。
 - 没有数据库、没有向量、没有服务器;真实记忆库保持 git-ignore。
@@ -18,18 +18,38 @@
 
 ## 一、两层记忆模型(核心)
 
-记忆分**两层**,`MEMORY.md` 索引各自独立计数(软提醒 150 行 / 20 KB,硬上限 200 行 / 25 KB),互不挤占:
+**一句话:** 全局库是你的「个人档案」——跨项目通用,每个 agent 每个会话都读;项目库是当前项目的「工作笔记」——只属于本项目,只在项目里读。两者**物理分库**,`MEMORY.md` 索引各自独立计数(软提醒 150 行 / 20 KB,硬上限 200 行 / 25 KB),互不挤占。
 
-| 层级 | 位置 | 索引 | 类型 | 谁在读 |
-|---|---|---|---|---|
-| **全局库** | `~/.engramory/` | `~/.engramory/MEMORY.md` | 四类型:`user` / `feedback` / `project` / `reference` | 每个会话、每个接入的 agent 都读 |
-| **项目库** | `<项目根>/memory/` | `memory/MEMORY.md` | 三类型:`project` / `feedback` / `reference`(**永不创建 `user`**) | 只在当前项目 |
+### 1.1 各管什么
 
-**关键约定:`user` 只进全局库。** 谁是用户永远是跨项目事实,放项目库会每项目复制一份然后漂移。全局库保留全部四类型;项目库只留 `feedback` / `project` / `reference`。
+| | **全局库** `~/.engramory/` | **项目库** `<项目根>/memory/` |
+|---|---|---|
+| 类比 | 个人档案(简历 + 习惯 + 常用资源) | 当前项目的笔记本 |
+| 放什么 | 你是谁、你跨项目怎么工作、跨项目常用资源 | 这个项目做到哪了、项目内的约定、项目内资源 |
+| 类型 | 四类:`user` / `feedback` / `project` / `reference` | 三类:`project` / `feedback` / `reference`(**永不 `user`**) |
+| 谁在读 | 每个会话、每个接入的 agent | 只当前项目 |
+| 改一处会怎样 | 所有项目一起生效 | 只影响本项目 |
 
-**回忆 / 写入纪律**(见 [`rules-snippet.md`](rules-snippet.md)):
+### 1.2 一条记忆该进哪个库——举例
 
-- 任务开始读**两个**索引:全局 `~/.engramory/MEMORY.md` + 项目 `memory/MEMORY.md`,只打开 hook 看起来相关的那几个详情文件。
+| 这条记忆 | 进 |
+|---|---|
+| "用户是 Python 开发者、偏好中文交流" | 全局库 `user` |
+| "用户写记忆前习惯先定库(跨项目→全局,本项目→项目)" | 全局库 `feedback` |
+| "用户常用某个跨项目的工具 / 文档链接" | 全局库 `reference` |
+| "本项目正在重构,当前做到目录结构调整" | 项目库 `project` |
+| "本项目 hook 豁免了 `templates/MEMORY.md`" | 项目库 `reference` |
+| "这个项目要用中文写文档" | 项目库 `feedback` |
+
+### 1.3 为什么分两层
+
+跨项目的事实如果塞进项目库,每个项目就要各复制一份,改一处别的项目还留着旧版本——这就是**漂移**。物理分库后:全局事实只写一处、处处生效;项目事实各归各,互不串味。
+
+**`user` 只进全局库**正是这条原则的直接结果:谁是用户永远是跨项目事实,放项目库会每项目复制一份然后漂移。
+
+### 1.4 回忆 / 写入纪律(见 [`rules-snippet.md`](rules-snippet.md))
+
+- 任务开始读**两个**索引:全局 `~/.engramory/MEMORY.md` + 项目 `memory/MEMORY.md`,只打开看起来相关的那几个详情文件。
 - 写入前**先定库**:跨项目事实 → 全局库;本项目事实 → 项目库;拿不准选项目库(全局索引每会话都加载、放错代价更高)。
 - 一条事实 = 一个文件;写前查重、能改就不新增、发现错的就删;git / 项目说明 / 代码里已记录的不再记。
 - 一个 `feedback` / `project` 记忆必须带 `Why:` 和 `How to apply:` 两行。
