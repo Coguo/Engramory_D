@@ -1,0 +1,20 @@
+{
+  "_comment": "Merge into your Claude Code settings.json (user-level %USERPROFILE%/.claude/settings.json or project .claude/settings.json). This uses the EXEC form ('command' = the interpreter, 'args' = its arguments): Claude Code spawns it directly with NO shell, so the script path in args is passed literally (no backslash-escaping and no quoting), even under 'Program Files' or on Windows. Set 'command' to the Python that should run the script: 'python3' on most macOS/Linux (a bare 'python' often does not exist there), 'python' on Windows, or -- most robust on any OS -- the absolute interpreter path from `python -c \"import sys; print(sys.executable)\"`. Replace the args path with the absolute path to engramory_index_guard.py. Optional: set ENGRAMORY_INDEX_IGNORE to exempt a NON-index MEMORY.md (e.g. this repo's templates/MEMORY.md) while the filename default keeps guarding both real indexes (memory/MEMORY.md + ~/.engramory/MEMORY.md); use a FULL PATH so it does not also exempt the real indexes that share the basename. See the env var table in hooks/INSTALL.md.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["/ABSOLUTE/PATH/TO/engramory/hooks/engramory_index_guard.py"],
+            "env": {
+              "ENGRAMORY_INDEX_IGNORE": "/ABSOLUTE/PATH/TO/engramory/templates/MEMORY.md"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
