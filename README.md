@@ -1,315 +1,200 @@
-**English** | [简体中文](README.zh-CN.md)
+[English](README.md) | **简体中文**
 
-# Engramory
+# Engramory_D — 双层记忆模型增强版
 
-[![CI](https://github.com/tinqiao-oss/engramory/actions/workflows/test.yml/badge.svg)](https://github.com/tinqiao-oss/engramory/actions/workflows/test.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)      [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 
-**An opinionated, zero-infrastructure memory *protocol* for small-scale, local,
-file-based agent memory** — a strict curation discipline plus a validator
-(`tools/engramory_doctor.py`), loaded as **standing rules** (`CLAUDE.md` /
-`AGENTS.md` / your host's rules file). It is not a database, a framework, or a
-relevance-loaded skill. Memory is a folder of small, human-readable markdown files
-plus one always-loaded index. No database, no embeddings, no server — just
-plain-text files you can open, read, edit, and diff in any editor (the live store
-itself stays git-ignored).
+一套**有主见、零基础设施、纯文件式**的智能体长期记忆协议,基于原版 Engramory 重新搭建,核心新增:**全局记忆库(两层模型)**——`user` 只进全局库、项目库只放本项目事实,跨项目与项目记忆物理分库。
 
-> *Engramory* — coined from *engram* (the physical trace a memory leaves in the
-> brain) + *memory*. Here: one file = one fact.
+> **原项目**:[Engramory (tinqiao-oss/engramory)](https://github.com/tinqiao-oss/engramory)
+> 本仓库是从原版复制后**重新搭建的独立项目**,在原版 0.5.0 基础上新增 0.6.0 全局记忆库与 0.6.1 两层模型收敛。
 
-> **Status: 0.5.0 — experimental.** The hard index cap (a `PreToolUse` hook) is
-> deterministic for the matched direct-edit tools (`Edit | Write | MultiEdit`) but
-> NOT a global write guard (Bash / MCP file tools / external editors / sync clients
-> bypass it); the discipline loads as standing rules the model follows, so it's
-> best-effort, not guaranteed on every task (see [SKILL.md](SKILL.md) §8). Assumes a
-> single writer / serialized writes. Don't rely on it as a "mandatory, reliable,
-> cross-agent" memory layer yet.
+- 记忆 = 一堆小小的、人能直接读的 markdown 文件 + 一个每次会话都加载的索引(`MEMORY.md`)。
+- 没有数据库、没有向量、没有服务器;真实记忆库保持 git-ignore。
+- **状态:0.6.1 —— 实验性。** 索引上限有 `PreToolUse` hook 确定性兜底,但纪律本身靠常驻规则由模型遵守,尽力而为(见 [Skills/engramory/SKILL.md](Skills/engramory/SKILL.md) §8)。假设单写者 / 串行写入。
+- **其他宿主(Codex / OpenClaw / 只读读取器等)接入尚未实测**,本 README 暂只描述 Claude Code 部署;后续实测后会更新。
 
 ---
 
-## What this is — and is NOT
+## 一、两层记忆模型(核心)
 
-Engramory is **not a new memory architecture**. The "markdown files + a small index
-loaded into context + the model curates it" pattern is now the mainstream shape
-for agent memory, and it ships in several places already. Engramory stands on:
+记忆分**两层**,`MEMORY.md` 索引各自独立计数(软提醒 150 行 / 20 KB,硬上限 200 行 / 25 KB),互不挤占:
 
-- **Claude Code native auto-memory** — the same markdown-`MEMORY.md`-index +
-  lazy detail-file pattern; its system prompt even uses the same
-  `user | feedback | project | reference` type vocabulary (per
-  [anthropics/claude-code#58840](https://github.com/anthropics/claude-code/issues/58840);
-  the *public docs* describe only the index + topic files). Engramory is a
-  disciplined superset of this default.
-- **[basic-memory](https://github.com/basicmachines-co/basic-memory)** — markdown
-  source-of-truth, YAML frontmatter `type`, `[[wikilink]]` graph, local-first.
-- **[obsidian-second-brain](https://github.com/eugeniughelbur/obsidian-second-brain)**,
-  **[claude-memory-compiler](https://github.com/coleam00/claude-memory-compiler)**
-  ("a loaded index beats vector search at personal scale"), and the broader family
-  of markdown-memory skills.
+| 层级 | 位置 | 索引 | 类型 | 谁在读 |
+|---|---|---|---|---|
+| **全局库** | `~/.engramory/` | `~/.engramory/MEMORY.md` | 四类型:`user` / `feedback` / `project` / `reference` | 每个会话、每个接入的 agent 都读 |
+| **项目库** | `<项目根>/memory/` | `memory/MEMORY.md` | 三类型:`project` / `feedback` / `reference`(**永不创建 `user`**) | 只在当前项目 |
 
-What Engramory contributes is the **opinionated bundle + the discipline**, not the
-primitives. Do not claim novelty on markdown, frontmatter, wikilinks, a loaded
-index, atomic notes, or curation hygiene — all are prior art.
+**关键约定:`user` 只进全局库。** 谁是用户永远是跨项目事实,放项目库会每项目复制一份然后漂移。全局库保留全部四类型;项目库只留 `feedback` / `project` / `reference`。
 
-## What's actually differentiated
+**回忆 / 写入纪律**(见 [`rules-snippet.md`](rules-snippet.md)):
 
-1. **A role/purpose ontology, headed by `feedback` = procedural memory.** The
-   semantic / episodic / **procedural** split is established prior art — the CoALA
-   taxonomy, and a named procedural type in LangMem and mem0 — so Engramory does not
-   claim the category. What it does is make procedural `feedback` the *spine* of a
-   deliberately tiny, hand-authored, human-readable set, with required **Why:** /
-   **How to apply:** lines, instead of auto-extracting it into a vector/graph store.
-   The contribution is the packaging and discipline, not the ontology.
-
-2. **The curation contract as concrete behaviour** the protocol applies (model-followed, not a hard gate): dedup-before-write,
-   update-don't-duplicate, delete-when-wrong, and a negative-scope rule ("don't
-   store what git/CLAUDE.md/the code already records"). Surveys consistently name
-   *modify/delete/forget* as the most under-implemented memory operation — Engramory
-   makes it the spine.
-
-3. **A bounded index designed not to silently rot.** The index loads every session and
-   Claude Code reads the first 200 lines / 25 KB (documented behavior), so an unbounded index silently
-   drops memories off the end. Engramory warns at 150 lines / 20 KB, compacts-or-asks
-   before 200 / 25 KB, and ships a hard `PreToolUse` hook backstop (it blocks only
-   *growth* past the cap — shrinking/compaction edits always pass). Both the line and
-   byte caps apply — whichever is hit first triggers (an index can be under the line
-   count yet over on bytes when the lines run long).
-
-## How it compares
-
-| | storage | recall | human-readable | typed ontology | curation discipline | bounded index | infra |
-|---|---|---|---|---|---|---|---|
-| **Engramory** | md files | loaded index → open file | ✅ | ✅ role-based (4) | ✅ contract (model-run) | ✅ 150/200 + hook | none |
-| CC auto-memory | md files | loaded index → open file | ✅ | ✅ same 4 types | partial (auto) | ~200-line window* | none (built-in) |
-| basic-memory | md + SQLite | semantic/FTS search | ✅ | ✅ freeform type | schema + overwrite checks | ❌ (no loaded index) | SQLite + embeddings |
-| obsidian-second-brain | md vault | index-first + search | ✅ | folder-typed | ✅ reconcile/lint | partial | none |
-| mem0 / Zep | vector/graph DB | semantic | ❌ (DB) | typed (prefs/episodic/proc.; Zep custom) | auto-extract | n/a | DB + embeddings |
-| [agentmemory](https://github.com/rohitg00/agentmemory) | SQLite + vector index (+opt. graph) | hybrid BM25+vector (+opt. graph), RRF | ❌ (DB/engine) | ✅ 4-tier lifecycle (work./epis./sem./proc.) | auto (capture + dedup + decay) | n/a | iii engine (local) + opt. embeddings |
-
-Engramory's lane: **minimalism + actionable role typing + curation discipline, zero
-infra.** It does *not* try to out-search basic-memory, out-scale mem0, or
-out-capture agentmemory — those solve a different problem (auto-capture /
-auto-ingest at volume) at a different cost point. agentmemory is the closest
-heavyweight foil: also local-first, but it bets on automatic capture (lifecycle
-hooks) + hybrid retrieval (BM25 + vectors + optional graph) on a SQLite/`iii`
-engine, where Engramory bets on hand-curation + a tiny always-loaded index and
-ships no engine at all.
-
-\* Claude Code's [memory docs](https://docs.claude.com/en/docs/claude-code/memory)
-document this exactly: *"the first 200 lines of `MEMORY.md`, or the first 25KB,
-whichever comes first, are loaded at the start of every conversation."* Other hosts
-vary, so the window stays configurable via the hook's env vars.
-
-## Where it fits — and the goal
-
-Engramory is a **portable memory *discipline*, not a product** — not a database, not a
-framework, not a relevance-loaded skill, not a Claude-Code-only plugin. The plumbing it rides on (a markdown index +
-atomic notes, the `user | feedback | project | reference` types, a bounded loaded index)
-is increasingly shipped *natively* by the host — Claude Code's built-in auto-memory
-already does it. So Engramory's value is the part hosts **don't** ship: the explicit
-curation contract (dedup-before-write, delete-when-wrong, don't-store-what-the-repo-
-already-has), procedural `feedback` notes with required Why/How, and a portable way to
-enforce the size cap.
-
-**The goal is the same discipline on *any* agent — by riding the real cross-agent rails,
-not by inventing a new standard.** Paste [`rules-snippet.md`](rules-snippet.md) into the
-host's always-loaded rules so the discipline fires every task; an **Engramory MCP server
-(planned)** would then let any MCP-capable agent (Claude Code, Cursor, Cline, Codex,
-Windsurf, …) share the same store, the same tools, and a **server-enforced cap** — making
-the one deterministic guarantee cross-agent instead of per-host. On a host that only gives
-you a flat rules file or a raw file store, that is a real upgrade; on a host that already
-ships structured memory, Engramory is a thin discipline layer on top — and says so.
+- 任务开始读**两个**索引:全局 `~/.engramory/MEMORY.md` + 项目 `memory/MEMORY.md`,只打开 hook 看起来相关的那几个详情文件。
+- 写入前**先定库**:跨项目事实 → 全局库;本项目事实 → 项目库;拿不准选项目库(全局索引每会话都加载、放错代价更高)。
+- 一条事实 = 一个文件;写前查重、能改就不新增、发现错的就删;git / 项目说明 / 代码里已记录的不再记。
+- 一个 `feedback` / `project` 记忆必须带 `Why:` 和 `How to apply:` 两行。
 
 ---
 
-## Install
+## 二、目录结构
 
-> Requires **Python 3.9+** for the hook and the `tools/` scripts (`python3` on
-> most systems).
-
-### Claude Code
-1. **Load the discipline as standing rules (primary):** paste
-   [`rules-snippet.md`](rules-snippet.md) into your always-loaded rules —
-   `~/.claude/CLAUDE.md` (all projects) or the project `CLAUDE.md` — so the protocol
-   fires on every task, not just when a skill happens to load by relevance.
-2. **(Optional) register the full spec as a skill:** copy or symlink this folder
-   into your Claude Code skills directory as `engramory/`, so [`SKILL.md`](SKILL.md)
-   is available on demand as the detailed reference (path in `hooks/INSTALL.md`).
-3. **Add the hard-cap hook:** register the hook from `hooks/` in your `settings.json`
-   (snippet in `hooks/settings.snippet.json`).
-4. Point `<MEMORY_ROOT>` at your memory directory; ensure it's `.gitignore`d if
-   inside a repo.
-
-### Global memory store (optional, multi-agent / cross-project)
-
-Cross-project memory — who the user is, cross-project work habits, cross-project
-resource pointers — has a home in a **host-agnostic global store**, so it can be
-shared by every agent instead of being copied into each project store:
-
-```sh
-python tools/engramory_init.py home          # creates ~/.engramory/ (default)
-python tools/engramory_init.py home --memory-root /path/to/store
+```
+Engramory_D/
+├── CLAUDE.md                    # 本仓库的项目记忆绑定块(memory-init 写入)
+├── rules-snippet.md             # 常驻规则片段 —— 部署时贴进全局 CLAUDE.md
+├── Skills/
+│   ├── engramory/SKILL.md       # 完整协议规范(两层模型、回忆/写入/上限)← skill 一
+│   └── memory-init/SKILL.md     # 项目库脚手架 ← skill 二
+├── tools/
+│   ├── engramory_init.py        # 初始化助手(home / codex / openclaw / <host>-reader)
+│   ├── engramory_check.py       # 索引上限检查
+│   └── engramory_doctor.py      # 记忆库体检(结构、schema、上限)
+├── hooks/
+│   ├── engramory_index_guard.py # PreToolUse 硬卡口 hook(拦"变大"的索引编辑)
+│   ├── INSTALL.md               # hook 安装 + 双库纪律 + memory-init 说明
+│   └── settings.snippet.json    # hook 注册示例
+├── templates/                   # 模板:全局/项目索引模板 + 示例(见 §四)
+├── adapters/                    # 各宿主接线说明(参考,未实测)
+└── tests/                       # test_tools.py(89) + test_index_guard.py(35)
 ```
 
-The global store is a plain four-type markdown folder like any project store, but it
-belongs to no single project and is read every session. Each host opts in through its
-own always-loaded rules: **Claude Code** — paste
-[`templates/claude-engramory-snippet.md`](templates/claude-engramory-snippet.md) into
-`~/.claude/CLAUDE.md`; **Codex/OpenClaw** — their injected rules block already
-references `~/.engramory/`; **a reader host** — `python tools/engramory_init.py
-<host>-reader --memory-root ~/.engramory` to recall it read-only. The index cap applies
-to each `MEMORY.md` independently, so the global index should stay naturally small.
+---
 
-### Codex
+## 三、Claude Code 部署流程
 
-Use the Codex init helper to wire the discipline into `AGENTS.md`, create the
-memory template, optionally install the full protocol as a Codex skill, and add a
-`.gitignore` entry when the store lives inside the project:
+按顺序执行:**建全局库 → 复制模板 → 常驻规则 → 搭建 hook → 创建两个 skill**。第 3.6 步是每个项目可选的初始化。
+
+### 3.1 建全局记忆库 `~/.engramory/`
 
 ```sh
-python tools/engramory_init.py codex --project-root /path/to/project --install-skill
+python tools/engramory_init.py home                      # 创建 ~/.engramory/(默认)
+python tools/engramory_init.py home --memory-root /path/to/store   # 迁到别处
 ```
 
-By default this creates `<project>/.engramory-memory/`. Pass `--memory-root` to
-use an existing folder. Keep this store separate from Codex native Memories:
-Codex Memories are generated state, while Engramory is a user-auditable plain
-folder. Full Codex notes are in [adapters/codex/README.md](adapters/codex/README.md).
+结构:
 
-### Read-only readers (recall another agent's memory)
+```
+~/.engramory/
+├── MEMORY.md        # 索引(每次会话加载)
+├── User/            # user 记忆(只进全局库)
+├── Feedback/        # 跨项目反馈/纪律
+├── Project/         # 跨项目状态
+├── Reference/       # 跨项目资源指针
+└── templates/       # 模板(第 3.2 步复制)
+```
 
-Point **any** host at a store **another agent owns and writes** (e.g. Claude Code's native
-auto-memory) so a delegated run is grounded in the same project memory — read-only, so the
-owner stays the sole writer (Engramory assumes a single writer; many readers are fine):
+### 3.2 复制模板到 `~/.engramory/templates/`
+
+把仓库 `templates/` 下的模板复制过去(全局/项目索引模板 + 示例):
 
 ```sh
-python tools/engramory_init.py codex-reader   --project-root ~/.codex \
-  --memory-root ~/.claude/projects/<project>/memory
-# same shape for any host — it lands in that host's own rules file:
-python tools/engramory_init.py cursor-reader  --project-root /path/to/repo --memory-root <store>
+mkdir -p ~/.engramory/templates
+cp templates/*.md ~/.engramory/templates/
 ```
 
-Reader hosts: `codex-reader` (dogfooded) plus `claude-reader`, `cursor-reader`, `kiro-reader`,
-`cline-reader`, `windsurf-reader`, `openclaw-reader`, `hermes-reader` (wired from each host's
-documented rules-file format, printed with an "unverified" note). It creates no store and never
-writes; `--memory-root` must be an existing store. See
-[adapters/reader/README.md](adapters/reader/README.md) (incl. the tested-host table + data-egress note).
+### 3.3 常驻规则 → 全局 `~/.claude/CLAUDE.md`
 
-### OpenClaw
+把 [`rules-snippet.md`](rules-snippet.md) 的 Memory 段写进用户级 `~/.claude/CLAUDE.md`,让每个项目每个任务都生效:
 
-Use the OpenClaw init helper (defaults to the workspace `~/.openclaw/workspace`):
+```markdown
+## Memory (Engramory)
+
+你有一个分**两层**的、基于文件的记忆:
+- 全局库 `~/.engramory/`(索引 `MEMORY.md`):跨项目四类型记忆,
+  由每个 agent 每个会话加载。
+- 项目库 `<项目根>/memory/`(索引 `memory/MEMORY.md`):本项目记忆,
+  由 `memory-init` 创建;永不创建 `user` 记忆。
+
+任务开始:读两个索引;写入:先定库(跨项目→全局,本项目→项目)。
+```
+
+### 3.4 搭建索引上限 hook(硬卡口)
+
+在 `~/.claude/settings.json` 注册 exec-form hook(片段见 [`hooks/settings.snippet.json`](hooks/settings.snippet.json)):
+
+```jsonc
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "<你的python>",
+            "args": ["<本仓库>/hooks/engramory_index_guard.py"],
+            "env": {
+              "ENGRAMORY_INDEX_IGNORE": "<可省略>"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- 只拦**让索引变大**的编辑;压缩 / 缩小一律放行。
+- **豁免 `ENGRAMORY_INDEX_IGNORE`**(逗号分隔):完整路径 → 只按解析后身份匹配,豁免 `.../templates/MEMORY.md` **不会**连累同 basename 的真实索引;bare basename(如 `MEMORY.md`)→ 匹配任意目录下同名文件(**慎用**,会连豁免两层索引)。
+- 按文件名 `MEMORY.md` 匹配 → 天然同时守护**两层**索引。
+
+### 3.5 创建两个 skill
+
+把仓库 `Skills/` 下的两个 skill 复制到用户 skill 目录:
 
 ```sh
-python tools/engramory_init.py openclaw --install-skill
+cp -r Skills/engramory   ~/.claude/skills/engramory    # skill 一:完整协议规范
+cp -r Skills/memory-init ~/.claude/skills/memory-init  # skill 二:项目库脚手架
 ```
 
-It writes a marked Engramory block into the workspace `AGENTS.md` (auto-loaded every
-session), installs the protocol under `.agents/skills/engramory` (OpenClaw
-auto-discovers it), and keeps a separate `.engramory-memory/` store. The index cap on
-OpenClaw is rules + `engramory_check.py`, **not** a deterministic deny hook (that would
-need a `before_tool_call` plugin) — see
-[adapters/openclaw/README.md](adapters/openclaw/README.md).
+### 3.6 每个项目:用 `memory-init` 建项目库(可选)
 
-### Kiro
+在每个项目根目录触发 `/memory-init`(或按其 [SKILL.md](Skills/memory-init/SKILL.md) 手动建):
 
-Kiro (AWS's agentic IDE/CLI) is a strong host — always-loaded steering files, an agent
-that reads/writes workspace markdown, and a real pre-write deny hook. Wiring is manual
-(no init helper yet): copy
-[`adapters/kiro/steering-engramory.md`](adapters/kiro/steering-engramory.md) to
-`.kiro/steering/engramory.md` (it is `inclusion: always` and pulls in the live index via
-`#[[file:.engramory-memory/MEMORY.md]]`), and keep your notes in a **non-steering**
-`.engramory-memory/` folder.
+```sh
+# 在项目里触发 /memory-init
+```
 
-> ⚠️ **Do not drop notes into `.kiro/steering/`.** A steering file with no `inclusion`
-> front-matter defaults to `inclusion: always`, so every note would load into every
-> request and **blow up your context** — the #1 Kiro install mistake. Only the index
-> belongs in always-loaded steering; notes stay in `.engramory-memory/` and open on
-> demand. Cap is rules + `engramory_check.py` for now (a deterministic Kiro `PreToolUse`
-> hook is possible but not yet shipped/tested). Full notes:
-> [adapters/kiro/README.md](adapters/kiro/README.md).
+它做的事:检测项目根 → 若无 `memory/MEMORY.md` 则从项目模板建库 → 建 `memory/` + `memory/feedback/`、`memory/project/`、`memory/reference/` 三个类型子文件夹 → 在项目 `CLAUDE.md` 追加标记块绑定双库 → `.gitignore` 加 `memory/`。**幂等**,绝不触碰全局库,绝不建 `user` 注释。
 
-### Any other agent (Hermes, Cursor, Cline, Windsurf, …)
-Engramory is model-agnostic (DeepSeek, GPT, Llama, …) and rides on the host's own
-memory store. Full wiring is in **[PORTING.md](PORTING.md)**; in short: paste
-[`rules-snippet.md`](rules-snippet.md) into the host's always-loaded rules (so the
-discipline is always-on, not just a by-relevance skill), import [`SKILL.md`](SKILL.md)
-if the host supports skills, point `<MEMORY_ROOT>` at the host's memory dir, and
-wire the size cap at the strongest rung the host supports: PreToolUse hook →
-`tools/engramory_check.py` after each index write → model discipline, with
-`tools/engramory_doctor.py` as a periodic backstop. A deterministic cap needs a
-pre-write *deny* hook. Only Claude Code's is written and tested here; some other hosts
-expose one too (Hermes; Cursor, though its is newer/flaky), so the cap is portable with
-a per-host I/O shim you write and verify yourself — while OpenClaw can only block via a
-`before_tool_call` plugin and some hosts have none. See [PORTING.md](PORTING.md) for the
-per-host picture. Where no such hook exists (or plain chat), the cap degrades to
-best-effort discipline (see [SKILL.md](SKILL.md) §9).
+## 四、模板路径
 
-First connecting a *pre-existing* store to the strict `doctor` surfaces a wall of
-mechanical issues (missing `created`/`updated`, Why/How not yet in canonical form) —
-don't blindly fix them. See PORTING.md's [Adopting an existing store](PORTING.md): run
-`--no-schema` for structure first, batch-backfill dates with the snippet, then
-hand-write Why/How.
+| 用途 | 路径 |
+|---|---|
+| 全局库索引模板(四类型,含 `user`) | `~/.engramory/templates/MEMORY_global_template.md` |
+| 项目库索引模板(三类型,无 `user`) | `~/.engramory/templates/MEMORY_project_template.md` |
+| 记忆示例(`feedback` / `project`) | `~/.engramory/templates/example-feedback.md`、`example-project.md` |
+| 仓库内模板(部署时 3.2 复制到 `~/.engramory/templates/`) | [`templates/`](templates/):`MEMORY_global_template.md`、`MEMORY_project_template.md`、`example-feedback.md`、`example-project.md` |
 
-A plain chat UI with no file access / no rules mechanism cannot run Engramory — it
-needs a host that executes skills/rules and can read & write files.
+---
 
-## Configuration
+## 五、工具用法
 
-- **`<MEMORY_ROOT>`** — where memory lives. Keep it somewhere you'll actually
-  look; `.gitignore` it inside repos.
-- **Index limits** — soft warn / hard cap default 150 / 200 lines and 20 / 25 KB;
-  override via the hook's env vars (see `hooks/`).
+```sh
+python tools/engramory_init.py home                    # 建全局库 ~/.engramory/
+python tools/engramory_check.py <MEMORY.md>            # 检查索引是否超上限
+python tools/engramory_doctor.py <memory-root>         # 记忆库体检
+```
 
-## Security & privacy
+> 需要 **Python 3.9+**。其他宿主(codex / openclaw / 只读读取器)接入尚未实测,仅 `adapters/` 下有参考接线说明。
 
-The store is **plain, unencrypted text** that any local process can read. `.gitignore`
-keeps it out of git — it is **not** encryption, and it does nothing against
-cloud-sync clients (Dropbox / iCloud / OneDrive), OS backups, or desktop search. If
-your `<MEMORY_ROOT>` sits in a synced or backed-up folder, its contents leave your
-machine.
+## 六、测试
 
-- **Never write a secret's *value*** into memory — keys, tokens, passwords,
-  cookies, recovery codes. Record only *where* the secret lives (e.g. "in the
-  password manager / env var `FOO`"). An IP / path / serial used as a locator is
-  fine; a credential value never is.
-- Minimize partial PII (phone, email, address) — prefer a pointer.
+```sh
+python tests/test_tools.py          # 89 全绿(含 5 个 home 模式用例)
+python tests/test_index_guard.py    # 35 全绿(含 6 个 IGNORE 豁免用例)
+```
 
-This discipline is **unenforced** (no hook scans memory content — see
-[SKILL.md](SKILL.md) §5/§8); treat it as best-effort and be deliberate.
+## 七、与原项目的关系
 
-## Known limitations
+- 本仓库由 [原版 Engramory(tinqiao-oss/engramory)](https://github.com/tinqiao-oss/engramory) 复制后重新搭建:**已清除原版 git 历史、无任何远程关联**,是一份全新的独立提交。
+- 增强点:全局记忆库(`home` 模式)、两层模型、`memory-init` 项目库脚手架、`ENGRAMORY_INDEX_IGNORE` 豁免、`user` 只进全局库约定。改动详单 `20260806修改.md` 已归档到原仓库目录,不随本仓库分发。
+- 原项目仍在上游维护:https://github.com/tinqiao-oss/engramory
 
-Engramory is a **single-project, single-writer, personal-scale** protocol. It does
-*not* yet have:
+## 八、安全与隐私
 
-- **Versioning / migration** — no `schema_version`; no defined upgrade path if the
-  frontmatter format changes. (For onboarding a *pre-existing* store, PORTING.md's
-  "Adopting an existing store" has a triage recipe + a date-backfill snippet.)
-- **Provenance / trust** — no `source`, `confidence`, `last_verified`, expiry, or
-  `superseded-by` fields. Recalled memory is advisory and attacker-influenceable
-  (see [SKILL.md](SKILL.md) §4); there is no authentication of memory content.
-- **Scope / multi-project** — no `scope` / `project_id`; one flat slug namespace, so
-  a store shared across projects/agents would hit slug collisions and project bleed.
-  A store-level manifest (protocol version + scope + host config) is the planned
-  first step — not built yet. (The **global store** adds a cross-project *tier* by
-  physical separation — cross-project facts live in `~/.engramory/`, project facts in
-  the project store — so they don't collide on one index; it does not add a scope
-  field to the per-note schema.)
-- **Concurrency** — single writer / serialized writes assumed (no locking).
-- **Scale** — the always-loaded flat index bounds the *active* set to what fits the
-  cap (~200 pointers). It is a personal / curated-scale tool, not a large corpus;
-  above that, a retrieval-based system (basic-memory, mem0) is the right tool.
+记忆库是**明文、未加密**的,任何本地进程都能读;`.gitignore` 只挡 git,挡不住云同步 / 系统备份 / 桌面搜索。**永远别把密钥的「值」写进记忆**(只记它「在哪」);尽量少写部分 PII,优先用指针。这条纪律未强制(没有 hook 扫描记忆内容)——当尽力而为。
 
-## Prior art & credits
-Andrej Karpathy's **LLM Wiki / Knowledge Base** (the markdown-over-RAG pattern, the
-most prominent statement of this approach — note it targets a knowledge
-*encyclopedia*, where Engramory targets agent *working* memory: who the user is,
-how the agent should behave, project state) · Claude Code auto-memory · basic-memory ·
-obsidian-second-brain · claude-memory-compiler (itself Karpathy-inspired) · the
-Anthropic memory tool · OpenAI Codex memory (and its earlier topics-memory proposal
-#19758) · [agentmemory](https://github.com/rohitg00/agentmemory) (a heavyweight,
-local-first counterpart — auto-capture + SQLite/`iii` engine + hybrid BM25/vector
-retrieval; the opposite design point to Engramory's zero-infra hand-curation) ·
-the wider markdown-memory community.
+## 九、许可证
 
-## License
-MIT — see [LICENSE](LICENSE).
+MIT —— 见 [LICENSE](LICENSE)。原项目 [tinqiao-oss/engramory](https://github.com/tinqiao-oss/engramory) 同以 MIT 授权。
