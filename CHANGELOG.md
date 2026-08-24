@@ -4,6 +4,37 @@ All notable changes to Engramory. Versions from 0.1.3 onward are git tags (0.1.0
 0.1.2 predate the 0.1.3 history consolidation). This is an experimental 0.x project
 — expect rough edges off Claude Code (see SKILL.md §8 / §9).
 
+## 0.6.2 — 2026-08-24
+
+Cross-platform fixes + macOS deployment verified. The fork restructured the repo
+(templates renamed, `SKILL.md` moved into `Skills/engramory/`) but `engramory_init.py`
+still checked the OLD layout — every mode (`home` / `codex` / `openclaw` / readers) crashed
+with "Engramory source files missing" before doing anything.
+
+Fixed
+- `engramory_init.py` source check now matches the fork layout
+  (`templates/MEMORY_global_template.md`, `templates/MEMORY_project_template.md`,
+  `Skills/engramory/SKILL.md`).
+- `home` starts the global index from `MEMORY_global_template.md` (four types incl. `user`);
+  project stores keep `MEMORY_project_template.md` (three types, no `user`).
+- `_copy_skill` / `_render_block` point at `Skills/engramory/SKILL.md`.
+- Path comparison normalized per platform in `_display_path` and the `home` `~/` display:
+  Windows folds case via `normcase` (junctions), macOS resolves the `/tmp -> /private/tmp`
+  symlink (and symlinked homes), Linux resolves as before. All platforms resolve BOTH sides
+  of a `relative_to`, so a resolved-vs-unresolved mismatch can't silently degrade display
+  or gitignore output.
+- Fixed the win32 branch: `os.path.normcase()` returns a plain `str`, which broke
+  `relative_to` / `as_posix` — wrapped back in `Path(...)`.
+
+Verified
+- macOS (2026-08-24): full Claude Code deployment — global store init, hook registration
+  (absolute interpreter path; `python` is a zsh alias here and hooks spawn without a shell),
+  hook smoke tests (oversize Write/Edit -> deny; shrinking/non-index -> allow), 89 tool +
+  35 hook-guard tests green.
+- Windows: branch logic verified under WindowsPath semantics but NOT tested on real Windows
+  yet (user will verify on a Windows machine); Linux: same POSIX logic as macOS, not
+  separately tested.
+
 ## 0.6.0 — 2026-08-06
 
 New **global memory store** — a host-agnostic, cross-project, cross-agent tier for the

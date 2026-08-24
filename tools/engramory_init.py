@@ -69,8 +69,24 @@ def _same_or_inside(child, parent):
 
 
 def _display_path(path, base):
-    path = path.resolve()
-    base = base.resolve()
+    # relative_to needs both sides on the same footing — a symlink/junction on one side
+    # alone breaks the prefix test. Each OS has its own quirk, so normalize per platform
+    # (explicit branches, not one catch-all):
+    if sys.platform == "win32":
+        # Junctions + case-insensitive FS: resolve (follow junctions) and fold case so a
+        # differently-cased base never fails the prefix test. normcase returns a plain str,
+        # so re-wrap in Path — relative_to / as_posix below need a path object.
+        path = Path(os.path.normcase(path.resolve()))
+        base = Path(os.path.normcase(base.resolve()))
+    elif sys.platform == "darwin":
+        # macOS: /tmp is a symlink to /private/tmp and home may be symlinked — resolve
+        # both sides so a resolved path and an unresolved one compare like with like.
+        path = path.resolve()
+        base = base.resolve()
+    else:
+        # Linux and other POSIX: plain resolve follows symlinks; nothing else needed.
+        path = path.resolve()
+        base = base.resolve()
     try:
         rel = path.relative_to(base)
         return rel.as_posix() or "."
@@ -120,12 +136,15 @@ def _ensure_gitignore(project_root, memory_root):
     return f"added {rel}"
 
 
-def _ensure_memory_store(source_root, memory_root):
+def _ensure_memory_store(source_root, memory_root, template_name="MEMORY_project_template.md"):
+    # The fork renames the index templates per tier: the global store (home) starts from
+    # MEMORY_global_template.md (four types incl. user), project stores from
+    # MEMORY_project_template.md (three types, no user).
     memory_root.mkdir(parents=True, exist_ok=True)
     index = memory_root / "MEMORY.md"
     if index.exists():
         return "kept existing MEMORY.md"
-    template = source_root / "templates" / "MEMORY.md"
+    template = source_root / "templates" / template_name
     shutil.copy2(template, index)
     return "created MEMORY.md from template"
 
@@ -138,8 +157,10 @@ def _copy_skill(source_root, project_root, force):
         shutil.rmtree(skill_root)
 
     skill_root.mkdir(parents=True, exist_ok=True)
-    for name in ("SKILL.md", "rules-snippet.md", "PORTING.md", "LICENSE"):
+    for name in ("rules-snippet.md", "PORTING.md", "LICENSE"):
         shutil.copy2(source_root / name, skill_root / name)
+    # The fork moved the protocol spec into Skills/engramory/SKILL.md.
+    shutil.copy2(source_root / "Skills" / "engramory" / "SKILL.md", skill_root / "SKILL.md")
     for dirname in ("templates", "tools"):
         shutil.copytree(
             source_root / dirname,
@@ -264,7 +285,7 @@ def _render_block(cfg, source_root, project_root, memory_root, install_skill):
         protocol_display = ".agents/skills/engramory/SKILL.md"
         check_display = ".agents/skills/engramory/tools/engramory_check.py"
     else:
-        protocol_display = _display_path(source_root / "SKILL.md", project_root)
+        protocol_display = _display_path(source_root / "Skills" / "engramory" / "SKILL.md", project_root)
         check_display = _display_path(source_root / "tools" / "engramory_check.py", project_root)
 
     note = cfg["note"](index_display, check_display, protocol_display)
@@ -281,7 +302,8 @@ def _require_sources(source_root, install_skill, snippet_rel="rules-snippet.md")
     # Fail fast with a clear message (before any side effects) if the repo this tool
     # ships in is incomplete, instead of a raw FileNotFoundError mid-copy. `snippet_rel`
     # is the host's rules snippet (default rules-snippet.md; a read-only host uses its own).
-    required = ["templates/MEMORY.md", "rules-snippet.md", "SKILL.md",
+    required = ["templates/MEMORY_global_template.md", "templates/MEMORY_project_template.md",
+                "rules-snippet.md", "Skills/engramory/SKILL.md",
                 "tools/engramory_check.py", "tools/engramory_doctor.py", snippet_rel]
     if install_skill:
         required += ["PORTING.md", "LICENSE"]
@@ -322,11 +344,17 @@ def _init_home(args, source_root):
         memory_root = Path.home() / ".engramory"
     memory_root = memory_root.resolve()
 
-    result = _ensure_memory_store(source_root, memory_root)
+    result = _ensure_memory_store(source_root, memory_root,
+                                  template_name="MEMORY_global_template.md")
 
     # Display the root as ~/... when it lives under the home directory (typical), else absolute.
+    # Resolve the home dir too: memory_root was resolved above, and comparing a resolved root
+    # against an unresolved home breaks the relative_to on any OS whose home path crosses a
+    # symlink (macOS /tmp -> /private/tmp, Windows junctions, a Linux symlinked $HOME) — the
+    # pretty ~/ display would degrade to an absolute path (and home-mode tests assert the ~/
+    # form). Resolving both sides is correct on all three platforms.
     try:
-        display = "~/" + memory_root.relative_to(Path.home()).as_posix()
+        display = "~/" + memory_root.relative_to(Path.home().resolve()).as_posix()
     except ValueError:
         display = memory_root.as_posix()
 
