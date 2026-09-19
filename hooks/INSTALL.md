@@ -24,7 +24,7 @@ by the `memory-init` skill (which copies the project template, wires the project
 
 ## 2. (Optional) Register the full spec as a skill — Claude Code
 
-The standing rules carry the trigger; [`SKILL.md`](../SKILL.md) is the complete
+The standing rules carry the trigger; [`SKILL.md`](../Skills/engramory/SKILL.md) is the complete
 protocol. On Claude Code you can ALSO register it as an Agent Skill so the full
 reference loads on demand — copy or symlink the folder so `SKILL.md` lands at:
 
@@ -83,11 +83,11 @@ file that isn't the index, and only acts when the target's filename is the index
 | `ENGRAMORY_WARN_BYTES` | `20480` | soft byte warning (20 KB) |
 | `ENGRAMORY_INDEX_NAME` | `MEMORY.md` | which filename counts as the index |
 | `ENGRAMORY_INDEX_PATH` | — | absolute path of the one index to guard (use when several `MEMORY.md` files exist; overrides name matching) |
-| `ENGRAMORY_INDEX_IGNORE` | — | comma-separated paths or bare basenames to **exempt** from the guard. A full path matches **only by resolved identity** (normcase + realpath) — exempting `.../templates/MEMORY.md` does NOT exempt the real `memory/MEMORY.md` index that shares the basename. A bare basename (e.g. `MEMORY.md`) exempts any file with that name in any directory, **including both tiers' indexes** — use sparingly. |
+| `ENGRAMORY_INDEX_IGNORE` | — | comma-separated paths or bare basenames to **exempt** from the guard. A full path matches **only by resolved identity** (normcase + realpath) — exempting `.../docs/MEMORY.md` does NOT exempt the real `memory/MEMORY.md` index that shares the basename. A bare basename (e.g. `MEMORY.md`) exempts any file with that name in any directory, **including both tiers' indexes** — use sparingly. |
 
-> ⚠️ **If you keep a file named `MEMORY.md` that is NOT an index** (project docs, this
-> repo's own `templates/MEMORY.md`, …), the filename default would gate it too. Two
-> opt-outs, pick by which is rarer:
+> ⚠️ **If you keep a file named `MEMORY.md` that is NOT an index** (project docs, a
+> scratch index, …), the filename default would gate it too. Two opt-outs, pick by
+> which is rarer:
 >
 > - **Exactly one real index, several non-index `MEMORY.md`s** → set
 >   `ENGRAMORY_INDEX_PATH` to the real index's absolute path; the hook then gates
@@ -95,7 +95,12 @@ file that isn't the index, and only acts when the target's filename is the index
 > - **Both tiers' indexes plus one stray `MEMORY.md`** → keep the default (it guards
 >   both tiers — including the project's `memory/MEMORY.md` and the global
 >   `~/.engramory/MEMORY.md`) and add the stray file to `ENGRAMORY_INDEX_IGNORE` as a
->   **full path** (e.g. `.../templates/MEMORY.md`) so only it is exempted.
+>   **full path** so only it is exempted.
+>
+> The standard two-tier setup needs neither: the default guards exactly the two real
+> indexes and nothing else. This repo used to need the second opt-out for its own
+> `templates/MEMORY.md`; 0.6.1 renamed that file to `MEMORY_global_template.md`, so it
+> no longer matches the default name and the exemption is gone.
 >
 > Otherwise a legitimate edit that grows the unrelated `MEMORY.md` past the cap is
 > denied (the deny message also reminds you of these opt-outs).
@@ -129,7 +134,7 @@ path in `ENGRAMORY_INDEX_IGNORE`, or (when exactly one real index exists) switch
 ## 5. Other agents (Cursor, Cline, Codex, OpenClaw, Windsurf, …)
 
 Step 1 already covers them: paste [`rules-snippet.md`](../rules-snippet.md) (or the
-body of [`SKILL.md`](../SKILL.md)) into the agent's always-loaded rules. The
+body of [`SKILL.md`](../Skills/engramory/SKILL.md)) into the agent's always-loaded rules. The
 150/200 guard then applies via the instructions; for the deterministic cap, adapt
 the hook to the host's pre-write deny hook or run `tools/engramory_check.py` after
 each index write. Full per-host wiring is in [PORTING.md](../PORTING.md).

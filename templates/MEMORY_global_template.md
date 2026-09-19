@@ -2,7 +2,8 @@
 
 > Pointers only — the actual content lives in the linked files, never here.
 > Soft cap 150 lines / 20 KB (warn). Hard cap 200 lines / 25 KB (compact first).
-> One line per memory: `- [<title>](<slug>.md) — <one-line hook>`
+> One line per memory: `- [<title>](<Type>/<slug>.md) — <one-line hook>`
+> Detail files live in the per-type subfolders: user/ · feedback/ · project/ · reference/
 > Plain-text & unencrypted: never store secret *values* here (only where they
 > live); keep this store git-ignored and out of cloud-synced / backed-up folders.
 

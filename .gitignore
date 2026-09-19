@@ -14,7 +14,8 @@ Thumbs.db
 # it (see SKILL.md §0). This only guards against accidentally committing a stray
 # MEMORY.md at the repo root; the templates/ scaffolds are intentionally kept.
 MEMORY.md
-!templates/MEMORY.md
+!templates/MEMORY_global_template.md
+!templates/MEMORY_project_template.md
 
 # Project-tier memory store (this repo dogfoods Engramory's own protocol)
 .engramory-memory/

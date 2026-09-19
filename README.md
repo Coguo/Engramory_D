@@ -5,13 +5,13 @@
 一套**有主见、零基础设施、纯文件式**的智能体长期记忆协议,基于原版 Engramory 重新搭建,核心新增:**全局记忆库(两层模型)**——`user` 只进全局库、项目库只放本项目事实,跨项目与项目记忆物理分库。
 
 > **原项目**:[Engramory (tinqiao-oss/engramory)](https://github.com/tinqiao-oss/engramory)
-> 本仓库是从原版复制后**重新搭建的独立项目**,在原版 0.5.0 基础上新增 0.6.0 全局记忆库与 0.6.1 两层模型收敛。
+> 本仓库是从原版复制后**重新搭建的独立项目**,在原版 0.5.0 基础上新增 0.6.0 全局记忆库、0.6.1 两层模型收敛、0.6.2 安装器与布局修复。
 
 > **⚠️ 声明:本项目仅供个人学习、研究使用，非商业项目，不用于任何商业用途。**
 
 - 记忆 = 一堆小小的、人能直接读的 markdown 文件 + 一个每次会话都加载的索引(`MEMORY.md`)。
 - 没有数据库、没有向量、没有服务器;真实记忆库保持 git-ignore。
-- **状态:0.6.1 —— 实验性。** 索引上限有 `PreToolUse` hook 确定性兜底,但纪律本身靠常驻规则由模型遵守,尽力而为(见 [Skills/engramory/SKILL.md](Skills/engramory/SKILL.md) §8)。假设单写者 / 串行写入。
+- **状态:0.6.2 —— 实验性。** 索引上限有 `PreToolUse` hook 确定性兜底,但纪律本身靠常驻规则由模型遵守,尽力而为(见 [Skills/engramory/SKILL.md](Skills/engramory/SKILL.md) §8)。假设单写者 / 串行写入。
 - **其他宿主(Codex / OpenClaw / 只读读取器等)接入尚未实测**,本 README 暂只描述 Claude Code 部署;后续实测后会更新。
 
 ---
@@ -38,7 +38,7 @@
 | "用户写记忆前习惯先定库(跨项目→全局,本项目→项目)" | 全局库 `feedback` |
 | "用户常用某个跨项目的工具 / 文档链接" | 全局库 `reference` |
 | "本项目正在重构,当前做到目录结构调整" | 项目库 `project` |
-| "本项目 hook 豁免了 `templates/MEMORY.md`" | 项目库 `reference` |
+| "本项目 hook 的 `ENGRAMORY_INDEX_IGNORE` 按完整路径还是 basename 匹配" | 项目库 `reference` |
 | "这个项目要用中文写文档" | 项目库 `feedback` |
 
 ### 1.3 为什么分两层
@@ -96,12 +96,16 @@ python tools/engramory_init.py home --memory-root /path/to/store   # 迁到别�
 ```
 ~/.engramory/
 ├── MEMORY.md        # 索引(每次会话加载)
-├── User/            # user 记忆(只进全局库)
-├── Feedback/        # 跨项目反馈/纪律
-├── Project/         # 跨项目状态
-├── Reference/       # 跨项目资源指针
+├── user/            # user 记忆(只进全局库)
+├── feedback/        # 跨项目反馈/纪律
+├── project/         # 跨项目状态
+├── reference/       # 跨项目资源指针
 └── templates/       # 模板(第 3.2 步复制)
 ```
+
+各条记忆按**类型子文件夹**归档,索引指针带上子文件夹:
+`- [标题](project/xxx.md) — 一句话摘要`。项目库只建 `feedback/` `project/` `reference/`
+三个子文件夹,**不建 `user/`** —— 用户是谁是跨项目事实,只属于全局库。
 
 ### 3.2 复制模板到 `~/.engramory/templates/`
 
@@ -155,7 +159,7 @@ cp templates/*.md ~/.engramory/templates/
 ```
 
 - 只拦**让索引变大**的编辑;压缩 / 缩小一律放行。
-- **豁免 `ENGRAMORY_INDEX_IGNORE`**(逗号分隔):完整路径 → 只按解析后身份匹配,豁免 `.../templates/MEMORY.md` **不会**连累同 basename 的真实索引;bare basename(如 `MEMORY.md`)→ 匹配任意目录下同名文件(**慎用**,会连豁免两层索引)。
+- **豁免 `ENGRAMORY_INDEX_IGNORE`**(逗号分隔):完整路径 → 只按解析后身份匹配,豁免 `.../docs/MEMORY.md` **不会**连累同 basename 的真实索引;bare basename(如 `MEMORY.md`)→ 匹配任意目录下同名文件(**慎用**,会连豁免两层索引)。标准两层部署**不需要**它:默认只守两个真索引。
 - 按文件名 `MEMORY.md` 匹配 → 天然同时守护**两层**索引。
 
 ### 3.5 创建两个 skill
@@ -208,7 +212,7 @@ python tests/test_index_guard.py    # 35 全绿(含 6 个 IGNORE 豁免用例)
 ## 七、与原项目的关系
 
 - 本仓库由 [原版 Engramory(tinqiao-oss/engramory)](https://github.com/tinqiao-oss/engramory) 复制后重新搭建:**已清除原版 git 历史、无任何远程关联**,是一份全新的独立提交。
-- 增强点:全局记忆库(`home` 模式)、两层模型、`memory-init` 项目库脚手架、`ENGRAMORY_INDEX_IGNORE` 豁免、`user` 只进全局库约定。改动详单 `20260806修改.md` 已归档到原仓库目录,不随本仓库分发。
+- 增强点:全局记忆库(`home` 模式)、两层模型、`memory-init` 项目库脚手架、`ENGRAMORY_INDEX_IGNORE` 豁免、`user` 只进全局库约定。改动详单见 [CHANGELOG.md](CHANGELOG.md)(0.6.0 / 0.6.1 / 0.6.2)。
 - 原项目仍在上游维护:https://github.com/tinqiao-oss/engramory
 
 ## 八、安全与隐私

@@ -31,12 +31,12 @@ Correct layout:
 - **Always-loaded:** one small steering file (`.kiro/steering/engramory.md`,
   `inclusion: always`) that carries the discipline and pulls in **only the index** via a
   live `#[[file:...]]` reference.
-- **On demand:** the notes live in a **non-steering** folder (`.engramory-memory/`) and
+- **On demand:** the notes live in a **non-steering** folder (`memory/`) and
   are opened by the agent with `read` / `#file` only when relevant.
 
 If a fan reports "Engramory blew up my context on Kiro," this is almost always the
 cause: the notes ended up in an always-loaded location. Move them out of
-`.kiro/steering/` into `.engramory-memory/` and keep only `engramory.md` (the index
+`.kiro/steering/` into `memory/` and keep only `engramory.md` (the index
 pointer) always-on.
 
 ---
@@ -46,26 +46,31 @@ pointer) always-on.
 1. **Install the discipline as an always-on steering file.** Copy
    [`steering-engramory.md`](steering-engramory.md) to `.kiro/steering/engramory.md`
    (workspace) or `~/.kiro/steering/engramory.md` (all workspaces). It is already
-   `inclusion: always` and ends with `#[[file:.engramory-memory/MEMORY.md]]`, which
+   `inclusion: always` and ends with `#[[file:memory/MEMORY.md]]`, which
    injects the live index into every session — the Kiro-native equivalent of Claude
    Code auto-loading `MEMORY.md`.
 
 2. **Create the store** (separate folder, not under `.kiro/steering/`):
 
    ```
-   .engramory-memory/
+   memory/
      MEMORY.md          # the pointer-only index
-     <slug>.md          # one note = one fact (opened on demand)
+     feedback/          # one note = one fact, filed by type (opened on demand)
+     project/
+     reference/
    ```
 
-   Seed `MEMORY.md` from [`templates/MEMORY.md`](../../templates/MEMORY.md).
+   Seed `MEMORY.md` from
+   [`templates/MEMORY_project_template.md`](../../templates/MEMORY_project_template.md).
+   A project store holds no `user/` — who the user is is a cross-project fact and belongs
+   only in the global store (`~/.engramory/`).
 
 3. **Git-ignore the store, but commit the steering pointer.** The store holds
-   machine-local detail, so add `.engramory-memory/` to `.gitignore`. The steering file
+   machine-local detail, so add `memory/` to `.gitignore`. The steering file
    `.kiro/steering/engramory.md` is just the protocol (no secrets) and is fine to commit
    and share with the team.
 
-4. **Do not hide the store from the agent.** Keep `.engramory-memory/` **out** of
+4. **Do not hide the store from the agent.** Keep `memory/` **out** of
    `.kiroignore` (`.kiroignore` blocks the agent from reading a path — you want it to
    read/write its own memory). `.gitignore` (no commit) and `.kiroignore` (no agent
    read) are independent; you want the first, not the second.
@@ -75,7 +80,7 @@ pointer) always-on.
    `inclusion: auto` with a `description`, so the long protocol is not always in context.
 
 `#[[file:...]]` reads the index live from the filesystem regardless of git status, so it
-works on the git-ignored `.engramory-memory/` store.
+works on the git-ignored `memory/` store.
 
 ---
 
@@ -88,7 +93,7 @@ tested here yet**, so treat the Phase-1 cap as **rules + an explicit check**
 1. The always-on steering file makes the recall/write discipline visible every session.
 2. `SKILL.md` (as a `manual`/`auto` steering file) gives the full protocol on demand.
 3. After editing the index, run
-   `python tools/engramory_check.py .engramory-memory/MEMORY.md` and compact if it
+   `python tools/engramory_check.py memory/MEMORY.md` and compact if it
    prints `OVER`; `engramory_doctor.py` is the occasional full health check.
 
 > **Why no deterministic cap shipped here yet (Phase 2).** Kiro genuinely supports a

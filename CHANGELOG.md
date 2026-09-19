@@ -4,12 +4,87 @@ All notable changes to Engramory. Versions from 0.1.3 onward are git tags (0.1.0
 0.1.2 predate the 0.1.3 history consolidation). This is an experimental 0.x project
 — expect rough edges off Claude Code (see SKILL.md §8 / §9).
 
+## 0.6.2 — 2026-09-19
+
+Repairs the drift left by the 0.6.1 re-layout. That release moved `SKILL.md` under `Skills/`,
+split the store template in two and renamed it, and dropped a redundant snippet template — but
+did not update the code and docs still pointing at the old paths.
+
+Fixed
+- **`engramory_init.py` could not run at all.** `_require_sources` still required `SKILL.md`
+  and `templates/MEMORY.md`, neither of which has existed since 0.6.1, so the tool exited with
+  "Engramory source files missing" **before any work, for every host** — all 25 `test_init_*`
+  cases were red. It now resolves the protocol body at `Skills/engramory/SKILL.md` (installing
+  it at the skill root as `SKILL.md`, where a host discovers it) and picks the store template
+  per tier: `MEMORY_global_template.md` for `home`, `MEMORY_project_template.md` for a project
+  store.
+- **A fresh store now ships its type subfolders.** `home` creates `user/` `feedback/`
+  `project/` `reference/`; a project host creates the three non-`user` ones. The layout the
+  protocol describes exists from the first write instead of being mkdir'd on demand.
+- **The default project store is `memory/`, not `.engramory-memory/`.** 0.6.1 renamed the store
+  in every document that *describes* it but left the installer default — the thing that
+  actually *creates* it — behind, so a Codex/OpenClaw user got a store at a path their
+  always-loaded rules never mention. `memory/` is what `rules-snippet.md` names.
+- **`--install-skill` ships `memory-init` alongside the protocol skill.** The scaffold that
+  creates a store and the protocol that describes it should never drift apart.
+- **`SKILL.md` §0 described a flat store** (`<slug>.md` directly in the store root) while the
+  templates, `memory-init` and the user-level `CLAUDE.md` all filed notes under type
+  subfolders. §0, §3 and §5 now describe the subfolder layout, so there is one layout rather
+  than two.
+- **Stale references** to files that moved or were deleted: `PORTING.md`, `hooks/INSTALL.md`,
+  `adapters/codex|openclaw|kiro/README.md`, `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`,
+  `.gitignore`, and `SKILL.md` §9 (which pointed at a `templates/` CLAUDE.md snippet 0.6.1
+  deliberately dropped — it now points at `rules-snippet.md`, the actual always-loaded source).
+- `tests/test_index_guard.py` labelled the `ENGRAMORY_INDEX_IGNORE` work `0.7.0`; it shipped in
+  0.6.0 and is now attributed there.
+- **`ENGRAMORY_INDEX_IGNORE` is no longer needed for this repo.** The guard only gates files
+  named `ENGRAMORY_INDEX_NAME` (default `MEMORY.md`), and 0.6.1 renamed the offending file to
+  `MEMORY_global_template.md` — so it stopped matching. The placeholder `env` block was removed
+  from `hooks/settings.snippet.json` (a copy-pasted `/ABSOLUTE/PATH/TO/.../templates/MEMORY.md`
+  was a dead path either way) and the examples in `README.md` / `hooks/INSTALL.md` now describe
+  the exemption generically instead of pointing at that file. The feature itself is unchanged
+  and still tested.
+
+Known
+- The `openclaw` host keeps its own managed memory at `<workspace>/memory/`, which is now also
+  the default store path. The adapter README requires the two be kept separate; nothing enforces
+  that yet. Unresolved.
+
+Verified
+- 89 tool + 35 hook tests pass (was 25 tool failures).
+- End-to-end: `codex --install-skill` creates the store, both skill directories and exactly one
+  marked block; `home` creates the four-type store; `engramory_doctor.py` reports clean on both.
+
+## 0.6.1 — 2026-08-06
+
+The two-tier model, converged against a real deployment. 0.6.0 introduced the global store;
+this release is what *using* it settled — chiefly that the two tiers should share one shape,
+and that `user` has no business existing in both. **No separate tag**: the work landed in the
+same session as 0.6.0 and is recorded here for the first time.
+
+- **`user` notes live in the global tier only.** A project store holds `feedback` / `project` /
+  `reference` and **never** creates `user`. Who the user is is a cross-project fact; filed per
+  project it would be copied into every store and drift. Written into `rules-snippet.md`,
+  `SKILL.md` (§0 / §2 / §5), `hooks/INSTALL.md` and the user-level `~/.claude/CLAUDE.md`.
+- **Project stores file notes by type subfolder** — `memory/feedback/` · `memory/project/` ·
+  `memory/reference/` — with the subfolder carried in the index pointer
+  (`- [title](project/xxx.md) — hook`).
+- **`memory-init` skill** — scaffolds a project store: detect the project root, create `memory/`
+  and its three type subfolders from the project template, bind the tiers with a marked block in
+  the project `CLAUDE.md`, and git-ignore the store. Idempotent; never touches the global store;
+  never creates a `user` note.
+- **Global/project templates split** — `templates/MEMORY_global_template.md` (four types) and
+  `templates/MEMORY_project_template.md` (three, no `user`).
+- The dedicated `templates/claude-engramory-snippet.md` drafted in 0.6.0 is **dropped** as
+  redundant with `rules-snippet.md`, which is the actual always-loaded source.
+
 ## 0.6.0 — 2026-08-06
 
 New **global memory store** — a host-agnostic, cross-project, cross-agent tier for the
 four-type memory that belongs to no single project (user profile, cross-project work
 habits, cross-project references). Additive and backward-compatible: project stores
-(`.engramory-memory/`, host-native memory) are untouched, and `rules-snippet.md` /
+(`.engramory-memory/` at the time — `memory/` from 0.6.1 on — and host-native memory) are
+untouched, and `rules-snippet.md` /
 `SKILL.md` now describe a two-tier model where each `MEMORY.md` keeps its own caps.
 
 Added
@@ -18,9 +93,16 @@ Added
   project store, but belongs to no single project and is read every session by every agent
   that opts in. It creates no rules file, no gitignore, no skill (refuses `--install-skill`
   before any side effect); each host picks it up through its own always-loaded rules.
-- **`templates/claude-engramory-snippet.md`** — a short block to paste into user-level
-  `~/.claude/CLAUDE.md` so Claude Code reads the global store in addition to its native
-  per-project auto-memory.
+- **Claude Code reads the global store too.** A block for user-level `~/.claude/CLAUDE.md`
+  so the global tier is loaded in addition to Claude Code's native per-project auto-memory.
+  Shipped as `rules-snippet.md`; the separate `templates/claude-engramory-snippet.md` drafted
+  alongside it was dropped in 0.6.1 as redundant with it.
+- **`ENGRAMORY_INDEX_IGNORE`** in the index-guard hook — a comma-separated exemption list, so a
+  `MEMORY.md` that is not a real index (at the time, this repo's `templates/MEMORY.md`, whose
+  comments pushed it over the cap) could be written without tripping the guard, while the two
+  tier indexes stayed guarded. A full path exempts that one file by resolved identity; a bare
+  basename exempts any file with that name in any directory — documented as discouraged, since
+  it would exempt both tier indexes too.
 - `rules-snippet.md` rewritten for the two tiers: recall reads **both** indexes; save picks
   the tier (cross-project → global, this-project → project); each `MEMORY.md` is bounded
   independently. `SKILL.md` §0/§4/§5/§6/§9 updated to match. The injected rules blocks for
@@ -30,7 +112,7 @@ Added
 Verified
 - +5 tests (home creates a store / defaults to `~/.engramory` under an overridden `$HOME` /
   keeps an existing `MEMORY.md` / refuses `--install-skill` before side effects / ascii-safe
-  console). 89 tool + 29 hook tests pass.
+  console). 89 tool + 35 hook tests pass.
 
 ## 0.5.0 — 2026-07-04
 

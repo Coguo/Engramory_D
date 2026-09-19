@@ -325,7 +325,7 @@ def test_deny_reason_names_only_growing_dimension(tmp_path):
     assert "KB >" in r and "lines > 200" not in r
 
 
-# --- 0.7.0: ENGRAMORY_INDEX_IGNORE exemptions ---
+# --- 0.6.0: ENGRAMORY_INDEX_IGNORE exemptions ---
 
 def test_ignore_path_exempts_growth(tmp_path):
     """A MEMORY.md listed in ENGRAMORY_INDEX_IGNORE by absolute path must NOT be

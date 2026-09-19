@@ -24,7 +24,7 @@ python tools\engramory_init.py openclaw --install-skill
 
 This creates or updates, under the workspace:
 
-- `<workspace>/.engramory-memory/MEMORY.md` (the curated Engramory store)
+- `<workspace>/memory/MEMORY.md` (the curated Engramory store)
 - `<workspace>/AGENTS.md`, with one marked Engramory block
 - `<workspace>/.gitignore`, when the memory folder is inside the workspace
 - `<workspace>/.agents/skills/engramory/`, when `--install-skill` is passed
@@ -50,7 +50,7 @@ deny hook:
 1. `AGENTS.md` makes the discipline visible every session.
 2. `.agents/skills/engramory/SKILL.md` gives the full protocol on demand.
 3. After editing the index, run
-   `python .agents/skills/engramory/tools/engramory_check.py .engramory-memory/MEMORY.md`
+   `python .agents/skills/engramory/tools/engramory_check.py memory/MEMORY.md`
    and compact if it reports `OVER`; `engramory_doctor.py` is the occasional full
    health check.
 
@@ -70,13 +70,13 @@ deny hook:
 After editing the index:
 
 ```sh
-python .agents/skills/engramory/tools/engramory_check.py .engramory-memory/MEMORY.md
+python .agents/skills/engramory/tools/engramory_check.py memory/MEMORY.md
 ```
 
 Occasional full health check:
 
 ```sh
-python .agents/skills/engramory/tools/engramory_doctor.py .engramory-memory
+python .agents/skills/engramory/tools/engramory_doctor.py memory
 ```
 
 If you did not install the skill copy, run the same tools from wherever the Engramory

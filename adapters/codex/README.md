@@ -20,7 +20,7 @@ python tools\engramory_init.py codex --project-root E:\path\to\project --install
 
 This creates or updates:
 
-- `<project>/.engramory-memory/MEMORY.md`
+- `<project>/memory/MEMORY.md`
 - `<project>/AGENTS.md`, with one marked Engramory block
 - `<project>/.gitignore`, when the memory folder is inside the project
 - `<project>/.agents/skills/engramory/`, when `--install-skill` is passed
@@ -61,13 +61,13 @@ rules plus explicit checks, not by a deterministic deny hook.
 After editing the index:
 
 ```sh
-python .agents/skills/engramory/tools/engramory_check.py .engramory-memory/MEMORY.md
+python .agents/skills/engramory/tools/engramory_check.py memory/MEMORY.md
 ```
 
 Occasional full health check:
 
 ```sh
-python .agents/skills/engramory/tools/engramory_doctor.py .engramory-memory
+python .agents/skills/engramory/tools/engramory_doctor.py memory
 ```
 
 If you did not install the skill copy, run the same tools from wherever the

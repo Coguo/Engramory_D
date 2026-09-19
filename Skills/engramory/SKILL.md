@@ -51,15 +51,22 @@ Rules that apply to **both** tiers:
   ssh paths, serial numbers). Confirm `.gitignore` covers it before writing there.
   (Credential *values* never belong in memory at all — see §5.)
 
-Layout (identical in each tier):
+Layout (identical in each tier, except that `user/` exists only in the global one):
 
 ```
 <ROOT>/
   MEMORY.md            # the index — loaded every session, pointers only
-  <slug>.md            # one memory = one file = one fact
-  <slug>.md
+  feedback/            # one memory = one file = one fact, filed by type
+  project/
+  reference/
+  user/                # GLOBAL TIER ONLY — a project store never creates this
   archive/             # retired / superseded memories (kept, but out of the index)
 ```
+
+Each note lives in its **type subfolder**, and its index pointer carries that
+subfolder: `- [<title>](project/<slug>.md) — <one-line hook>`. Never write a
+detail file loose in `<ROOT>/` — a note outside its type folder is invisible to
+the layout every other surface describes.
 
 **Which tier?** When saving, pick the tier before writing: **cross-project / about the
 user → global; about this project → project.** `user` notes live only in the global
@@ -170,18 +177,20 @@ not a content store**. Each line is one pointer.
 
 > Pointers only — the actual content lives in the linked files, never here.
 > Soft cap 150 lines / 20 KB (warn). Hard cap 200 lines / 25 KB (compact first).
+> One line per memory: `- [<title>](<Type>/<slug>.md) — <one-line hook>`
+> Detail files live in the per-type subfolders: user/ · feedback/ · project/ · reference/
 
 ## user
-- [Founder & lead engineer](founder-profile.md) — who the user is
+- [Founder & lead engineer](user/founder-profile.md) — who the user is
 
 ## feedback
-- [Verify before reporting done](verify-before-done.md) — grep the change first
+- [Verify before reporting done](feedback/verify-before-done.md) — grep the change first
 
 ## project
-- [API gateway v2 shipped](api-gateway-v2-status.md) — release 2.0 done 2026-01-15
+- [API gateway v2 shipped](project/api-gateway-v2-status.md) — release 2.0 done 2026-01-15
 
 ## reference
-- [Runtime log path](runtime-log-path.md) — ~/.myapp/server.log
+- [Runtime log path](reference/runtime-log-path.md) — ~/.myapp/server.log
 ```
 
 If a line starts carrying real content (sentences, explanations, status dumps),
@@ -249,10 +258,12 @@ session. Before writing, run the checks in this order:
 
 3. **Write the file.** Pick the type, write a sharp `description`, fill the
    required fields for that type (Why/How for feedback & project; absolute dates
-   for project), and link related memories with `[[...]]`.
+   for project), and link related memories with `[[...]]`. Land it in that type's
+   **subfolder** (`<ROOT>/<type>/<slug>.md`) — never loose in `<ROOT>/`.
 
 4. **Update the index.** Add one pointer line under the right type heading **in the
-   tier's own `MEMORY.md`**. Then run the index-size guard in §6.
+   tier's own `MEMORY.md`**, with the subfolder in the path
+   (`- [title](<type>/<slug>.md) — hook`). Then run the index-size guard in §6.
 
 5. **Delete when wrong.** If a memory turns out to be false or obsolete, delete
    the file (or move it to `archive/`) and remove its index line. Forgetting is a
@@ -360,7 +371,7 @@ Engramory is a *discipline*, not a storage engine — it rides on whatever memor
 store and instruction mechanism your host already has. Full per-host setup is in
 **PORTING.md**. The **global tier** is a host-agnostic plain folder: any host that can
 read/write files can use it, but each host must **opt in** via its own always-loaded
-rules (Claude Code: paste the CLAUDE.md snippet from `templates/` into
+rules (Claude Code: paste `rules-snippet.md` into
 `~/.claude/CLAUDE.md`; Codex/OpenClaw: their injected rules block already references
 `~/.engramory/`; a reader host: `engramory_init.py <host>-reader --memory-root
 ~/.engramory`). The size cap degrades gracefully when a host has no PreToolUse

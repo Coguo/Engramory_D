@@ -52,7 +52,7 @@ Config via environment variables (all optional):
                        matching; use when several MEMORY.md exist)
   ENGRAMORY_INDEX_IGNORE  comma-separated EXEMPTIONS from the guard. A full path
                        matches only by resolved identity (normcase + realpath), so
-                       e.g. a repo's templates/MEMORY.md is exempted WITHOUT also
+                       e.g. a repo's docs/MEMORY.md is exempted WITHOUT also
                        exempting the real memory/MEMORY.md index that shares the
                        basename. A BARE basename ("MEMORY.md") matches any file with
                        that name in any dir (use sparingly — it exempts BOTH tiers'
@@ -186,7 +186,7 @@ def main():
     # EXEMPT files listed in ENGRAMORY_INDEX_IGNORE. A FULL PATH matches only by
     # resolved identity; a BARE basename (e.g. "MEMORY.md") matches any file with
     # that name. Never let a full path's basename match globally: ignoring
-    # ".../templates/MEMORY.md" must NOT also exempt the real memory/MEMORY.md or
+    # ".../docs/MEMORY.md" must NOT also exempt the real memory/MEMORY.md or
     # ~/.engramory/MEMORY.md index (same basename) — that would silently disable
     # the guard for a whole tier.
     if ignore:

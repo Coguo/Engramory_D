@@ -14,7 +14,7 @@ cross-project, cross-agent four-type memory (user profile, cross-project feedbac
 cross-project references). It is host-agnostic plain markdown — any host with file
 access can read/write it, and it is shared across all project sessions. It creates
 no rules file, no gitignore, no skill; each host picks it up via its own always-loaded
-rules (Claude Code: paste the CLAUDE.md snippet from the repo into `~/.claude/CLAUDE.md`;
+rules (Claude Code: paste `rules-snippet.md` into `~/.claude/CLAUDE.md`;
 Codex/OpenClaw: the injected rules block already references `~/.engramory/`; a reader host:
 `engramory_init.py <host>-reader --memory-root ~/.engramory`).
 
@@ -44,6 +44,21 @@ from pathlib import Path
 
 def _repo_root():
     return Path(__file__).resolve().parents[1]
+
+
+# Where the repo keeps each artifact this tool ships. Protocol bodies live under `Skills/`
+# (one directory per skill, each holding a `SKILL.md`) so the repo mirrors the layout a host
+# expects in its own skill root; the two store templates differ by type set (see below).
+SKILL_REL = "Skills/engramory/SKILL.md"
+INIT_SKILL_REL = "Skills/memory-init/SKILL.md"
+GLOBAL_TEMPLATE_REL = "templates/MEMORY_global_template.md"
+PROJECT_TEMPLATE_REL = "templates/MEMORY_project_template.md"
+
+# A store's type subfolders (SKILL.md §0). The global store holds all four types; a project
+# store never holds `user` — who the user is is a cross-project fact, so it would be copied
+# per project and drift.
+GLOBAL_TYPE_DIRS = ("user", "feedback", "project", "reference")
+PROJECT_TYPE_DIRS = ("feedback", "project", "reference")
 
 
 def _read_text(path):
@@ -120,13 +135,19 @@ def _ensure_gitignore(project_root, memory_root):
     return f"added {rel}"
 
 
-def _ensure_memory_store(source_root, memory_root):
+def _ensure_memory_store(source_root, memory_root, template_rel, type_dirs):
+    # `template_rel` picks the store's type set (GLOBAL_TEMPLATE_REL for the global store,
+    # PROJECT_TEMPLATE_REL for a project store). `type_dirs` are created empty alongside the
+    # index so a fresh store already has the layout the protocol describes — an agent that
+    # recalls or writes then never has to mkdir a type folder first. Both are skipped when an
+    # index already exists: an existing store is never restructured.
     memory_root.mkdir(parents=True, exist_ok=True)
     index = memory_root / "MEMORY.md"
     if index.exists():
         return "kept existing MEMORY.md"
-    template = source_root / "templates" / "MEMORY.md"
-    shutil.copy2(template, index)
+    shutil.copy2(source_root / template_rel, index)
+    for name in type_dirs:
+        (memory_root / name).mkdir(exist_ok=True)
     return "created MEMORY.md from template"
 
 
@@ -138,7 +159,10 @@ def _copy_skill(source_root, project_root, force):
         shutil.rmtree(skill_root)
 
     skill_root.mkdir(parents=True, exist_ok=True)
-    for name in ("SKILL.md", "rules-snippet.md", "PORTING.md", "LICENSE"):
+    # The protocol body lives at Skills/engramory/SKILL.md but must land at the skill ROOT
+    # named SKILL.md — that is where a host auto-discovers it.
+    shutil.copy2(source_root / SKILL_REL, skill_root / "SKILL.md")
+    for name in ("rules-snippet.md", "PORTING.md", "LICENSE"):
         shutil.copy2(source_root / name, skill_root / name)
     for dirname in ("templates", "tools"):
         shutil.copytree(
@@ -146,6 +170,14 @@ def _copy_skill(source_root, project_root, force):
             skill_root / dirname,
             ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"),
         )
+    # Ship `memory-init` alongside: it scaffolds a project store, so it is the thing that
+    # creates the very layout this tool just installed the protocol for. Kept in lockstep
+    # by installing both or neither.
+    init_root = skill_root.parent / "memory-init"
+    if force:
+        shutil.rmtree(init_root, ignore_errors=True)
+    init_root.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_root / INIT_SKILL_REL, init_root / "SKILL.md")
     return "installed .agents/skills/engramory"
 
 
@@ -258,13 +290,18 @@ def _render_block(cfg, source_root, project_root, memory_root, install_skill):
     snippet = _read_text(source_root / cfg.get("snippet", "rules-snippet.md")).strip()
     memory_display = _display_path(memory_root, project_root)
     index_display = (Path(memory_display) / "MEMORY.md").as_posix()
+    # A no-op for write hosts: `rules-snippet.md` names the project store literally (`memory/`)
+    # rather than via a placeholder, so there is nothing to substitute. That is consistent at
+    # the default, but it means a custom `--memory-root` is NOT reflected in the injected
+    # block, which still says `memory/`. Known limitation — only the reader snippets carry the
+    # placeholder. Do not drop this replace: the reader snippets still depend on it.
     snippet = snippet.replace("<MEMORY_ROOT>", memory_display)
 
     if install_skill:
         protocol_display = ".agents/skills/engramory/SKILL.md"
         check_display = ".agents/skills/engramory/tools/engramory_check.py"
     else:
-        protocol_display = _display_path(source_root / "SKILL.md", project_root)
+        protocol_display = _display_path(source_root / SKILL_REL, project_root)
         check_display = _display_path(source_root / "tools" / "engramory_check.py", project_root)
 
     note = cfg["note"](index_display, check_display, protocol_display)
@@ -281,10 +318,10 @@ def _require_sources(source_root, install_skill, snippet_rel="rules-snippet.md")
     # Fail fast with a clear message (before any side effects) if the repo this tool
     # ships in is incomplete, instead of a raw FileNotFoundError mid-copy. `snippet_rel`
     # is the host's rules snippet (default rules-snippet.md; a read-only host uses its own).
-    required = ["templates/MEMORY.md", "rules-snippet.md", "SKILL.md",
+    required = [GLOBAL_TEMPLATE_REL, PROJECT_TEMPLATE_REL, "rules-snippet.md", SKILL_REL,
                 "tools/engramory_check.py", "tools/engramory_doctor.py", snippet_rel]
     if install_skill:
-        required += ["PORTING.md", "LICENSE"]
+        required += [INIT_SKILL_REL, "PORTING.md", "LICENSE"]
     required = list(dict.fromkeys(required))  # dedup (snippet_rel may be rules-snippet.md)
     missing = [r for r in required if not (source_root / r).exists()]
     if missing:
@@ -292,9 +329,12 @@ def _require_sources(source_root, install_skill, snippet_rel="rules-snippet.md")
                          + ", ".join(missing))
 
 
-# The parser default for --memory-root (".engramory-memory") doubles as the sentinel
-# meaning "not explicitly given". `home` interprets it as "use ~/.engramory".
-_DEFAULT_MEMORY_ROOT = ".engramory-memory"
+# The parser default for --memory-root ("memory") doubles as the sentinel meaning "not
+# explicitly given". `home` interprets it as "use ~/.engramory". The name is a visible
+# `memory/` (not a dot-directory) to match what `rules-snippet.md` — the always-loaded rules
+# an agent actually reads every session — tells it to recall from; a store created at a path
+# those rules do not name is a store the agent never finds.
+_DEFAULT_MEMORY_ROOT = "memory"
 
 
 def _init_home(args, source_root):
@@ -322,7 +362,7 @@ def _init_home(args, source_root):
         memory_root = Path.home() / ".engramory"
     memory_root = memory_root.resolve()
 
-    result = _ensure_memory_store(source_root, memory_root)
+    result = _ensure_memory_store(source_root, memory_root, GLOBAL_TEMPLATE_REL, GLOBAL_TYPE_DIRS)
 
     # Display the root as ~/... when it lives under the home directory (typical), else absolute.
     try:
@@ -390,7 +430,8 @@ def init_host(args, host):
 
     results = []
     if creates_store:
-        results.append(("memory", _ensure_memory_store(source_root, memory_root)))
+        results.append(("memory", _ensure_memory_store(source_root, memory_root,
+                                                       PROJECT_TEMPLATE_REL, PROJECT_TYPE_DIRS)))
         results.append(("gitignore", _ensure_gitignore(project_root, memory_root)))
     else:
         results.append(("memory", f"read-only — using existing store at {memory_root} (not created/modified)"))

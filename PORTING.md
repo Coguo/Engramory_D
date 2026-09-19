@@ -26,7 +26,7 @@ the host's **always-loaded** instructions:
 | Cline / Windsurf | their rules / system-prompt file | varies |
 
 Paste [`rules-snippet.md`](rules-snippet.md) into that always-loaded file. If the
-host also supports skills, additionally import [`SKILL.md`](SKILL.md) for the full
+host also supports skills, additionally import [`SKILL.md`](Skills/engramory/SKILL.md) for the full
 protocol — the always-loaded snippet guarantees the behaviour fires; the skill
 carries the detail.
 
@@ -70,8 +70,8 @@ front-matter **defaults to `inclusion: always`** — so dumping the whole store 
 `.kiro/steering/` (or adding `file://.kiro/steering/**/*.md` to a custom agent's
 `resources`) loads **every note into every request** and overflows the window. Put only
 **one** always-on steering file (`.kiro/steering/engramory.md`, `inclusion: always`)
-that pulls in the index via a live `#[[file:.engramory-memory/MEMORY.md]]` reference, and
-keep the notes in a **non-steering** `.engramory-memory/` folder the agent opens on
+that pulls in the index via a live `#[[file:memory/MEMORY.md]]` reference, and
+keep the notes in a **non-steering** `memory/` folder the agent opens on
 demand. `.gitignore` the store but commit the steering pointer; do NOT add the store to
 `.kiroignore` (that would stop the agent reading its own memory). Full wiring +
 ready-to-copy template: [adapters/kiro/README.md](adapters/kiro/README.md).
@@ -190,6 +190,6 @@ limitations (both enforce the cap by rules + `engramory_check.py`, not a determi
 hook).
 
 Kiro has no init helper yet — wire it manually (one always-on steering file + a
-non-steering `.engramory-memory/` store) per
+non-steering `memory/` store) per
 [adapters/kiro/README.md](adapters/kiro/README.md), which also ships a ready-to-copy
 [steering template](adapters/kiro/steering-engramory.md).

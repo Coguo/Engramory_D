@@ -66,14 +66,24 @@ def test_init_codex_creates_memory_agents_gitignore_and_skill(tmp_path):
     rc, out = _run(INIT, "codex", "--project-root", str(project), "--install-skill")
     assert rc == 0 and "Engramory Codex init complete" in out
 
-    assert (project / ".engramory-memory" / "MEMORY.md").is_file()
+    # `.engramory-memory` -> `memory`: the default project store was renamed so it matches the
+    # path `rules-snippet.md` (the always-loaded rules) tells the agent to recall from. These
+    # assertions pinned the OLD default, which is exactly what changed — they were updated with
+    # the default, not loosened to make a failure go away.
+    assert (project / "memory" / "MEMORY.md").is_file()
     agents = (project / "AGENTS.md").read_text(encoding="utf-8")
     assert agents.count("BEGIN ENGRAMORY CODEX") == 1
-    assert ".engramory-memory" in agents
+    assert "memory" in agents
     assert "Codex native Memories" in agents
 
     gitignore = (project / ".gitignore").read_text(encoding="utf-8")
-    assert "/.engramory-memory/" in gitignore
+    assert "/memory/" in gitignore
+
+    # A fresh store ships the type subfolders the protocol describes (SKILL.md §0), so nothing
+    # downstream has to mkdir one before its first write.
+    for sub in ("feedback", "project", "reference"):
+        assert (project / "memory" / sub).is_dir()
+    assert not (project / "memory" / "user").exists()  # project stores never hold `user`
 
     skill = project / ".agents" / "skills" / "engramory"
     assert (skill / "SKILL.md").is_file()
@@ -85,7 +95,7 @@ def test_init_codex_creates_memory_agents_gitignore_and_skill(tmp_path):
     agents2 = (project / "AGENTS.md").read_text(encoding="utf-8")
     gitignore2 = (project / ".gitignore").read_text(encoding="utf-8")
     assert agents2.count("BEGIN ENGRAMORY CODEX") == 1
-    assert gitignore2.splitlines().count("/.engramory-memory/") == 1
+    assert gitignore2.splitlines().count("/memory/") == 1
 
 
 def test_init_codex_external_memory_root_does_not_gitignore(tmp_path):
@@ -99,7 +109,7 @@ def test_init_codex_external_memory_root_does_not_gitignore(tmp_path):
 
 def test_init_codex_keeps_existing_memory_index(tmp_path):
     project = tmp_path / "project"
-    memory = project / ".engramory-memory"
+    memory = project / "memory"
     memory.mkdir(parents=True)
     index = memory / "MEMORY.md"
     index.write_text("# Custom Index\n", encoding="utf-8")
@@ -145,13 +155,13 @@ def test_init_openclaw_creates_store_agents_block_and_skill(tmp_path):
     project = tmp_path / "workspace"
     rc, out = _run(INIT, "openclaw", "--project-root", str(project), "--install-skill")
     assert rc == 0 and "Engramory OpenClaw init complete" in out
-    assert (project / ".engramory-memory" / "MEMORY.md").is_file()
+    assert (project / "memory" / "MEMORY.md").is_file()
     agents = (project / "AGENTS.md").read_text(encoding="utf-8")
     assert agents.count("BEGIN ENGRAMORY OPENCLAW") == 1
     assert "OpenClaw-specific wiring" in agents
     assert "before_tool_call" in agents  # honest: deterministic cap needs a plugin, not the py hook
     assert (project / ".agents" / "skills" / "engramory" / "SKILL.md").is_file()
-    assert "/.engramory-memory/" in (project / ".gitignore").read_text(encoding="utf-8")
+    assert "/memory/" in (project / ".gitignore").read_text(encoding="utf-8")
 
 
 def test_init_codex_and_openclaw_coexist_with_distinct_blocks(tmp_path):
@@ -188,7 +198,7 @@ def test_init_codex_reader_read_only_points_at_existing_store(tmp_path):
     low = agents.lower()
     assert "read-only" in low and "never" in low and "sole writer" in low  # read-only intent explicit
     assert "cc-memory" in agents  # points at the existing store
-    assert not (cfg / ".engramory-memory").exists()  # created NO new store
+    assert not (cfg / "memory").exists()  # created NO new store
     assert not (cfg / ".gitignore").exists()          # and NO gitignore
     assert sorted(p.name for p in store.iterdir()) == before  # source store untouched
     # idempotent
@@ -364,7 +374,12 @@ def test_init_home_creates_global_store(tmp_path):
     rc, out = _run(INIT, "home", "--memory-root", str(root))
     assert rc == 0 and "global store ready" in out
     assert (root / "MEMORY.md").is_file()
-    assert "Memory Index" in (root / "MEMORY.md").read_text(encoding="utf-8")
+    index = (root / "MEMORY.md").read_text(encoding="utf-8")
+    assert "Memory Index" in index
+    # The global store is the FOUR-type one — it is the only tier allowed to hold `user`.
+    for sub in ("user", "feedback", "project", "reference"):
+        assert (root / sub).is_dir()
+    assert "## user" in index  # the four-type template, not the project one
 
 
 def test_init_home_defaults_to_home_engramory(tmp_path):

@@ -9,7 +9,7 @@ focused and well-tested.
 - No build step, no dependencies beyond the Python standard library.
 - The load-bearing code is `hooks/engramory_index_guard.py` (the Claude Code
   PreToolUse cap) plus the two portable scripts in `tools/`.
-- `SKILL.md` is the full protocol; `README.md` / `README.zh-CN.md` are the front
+- `Skills/engramory/SKILL.md` is the full protocol; `README.md` is the front
   door; `PORTING.md` covers non-Claude-Code hosts.
 
 ## Running the tests
@@ -31,8 +31,8 @@ Every behavioral change to the hook or the tools should come with a test.
   fails open silently. Preserve those invariants.
 - **Don't oversell reliability.** Only the Claude Code hook is deterministic; the
   discipline is best-effort. Keep docs honest (see `SKILL.md` §8).
-- **Keep both READMEs in sync.** A change to `README.md` should be mirrored in
-  `README.zh-CN.md` (and vice versa).
+- **Keep the docs pointing at real files.** Nothing breaks a reader faster than a
+  link to a path that moved. When you rename or relocate something, grep for it.
 - **No secrets or machine-local detail** in examples, templates, or memory: the
   store is plain text (see `SECURITY.md`).
 
