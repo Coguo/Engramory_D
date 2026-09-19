@@ -84,8 +84,24 @@ def _same_or_inside(child, parent):
 
 
 def _display_path(path, base):
-    path = path.resolve()
-    base = base.resolve()
+    # relative_to needs both sides on the same footing — a symlink/junction on one side
+    # alone breaks the prefix test. Each OS has its own quirk, so normalize per platform
+    # (explicit branches, not one catch-all):
+    if sys.platform == "win32":
+        # Junctions + case-insensitive FS: resolve (follow junctions) and fold case so a
+        # differently-cased base never fails the prefix test. normcase returns a plain str,
+        # so re-wrap in Path — relative_to / as_posix below need a path object.
+        path = Path(os.path.normcase(path.resolve()))
+        base = Path(os.path.normcase(base.resolve()))
+    elif sys.platform == "darwin":
+        # macOS: /tmp is a symlink to /private/tmp and home may be symlinked — resolve
+        # both sides so a resolved path and an unresolved one compare like with like.
+        path = path.resolve()
+        base = base.resolve()
+    else:
+        # Linux and other POSIX: plain resolve follows symlinks; nothing else needed.
+        path = path.resolve()
+        base = base.resolve()
     try:
         rel = path.relative_to(base)
         return rel.as_posix() or "."
@@ -365,8 +381,13 @@ def _init_home(args, source_root):
     result = _ensure_memory_store(source_root, memory_root, GLOBAL_TEMPLATE_REL, GLOBAL_TYPE_DIRS)
 
     # Display the root as ~/... when it lives under the home directory (typical), else absolute.
+    # Resolve the home dir too: memory_root was resolved above, and comparing a resolved root
+    # against an unresolved home breaks the relative_to on any OS whose home path crosses a
+    # symlink (macOS /tmp -> /private/tmp, Windows junctions, a Linux symlinked $HOME) — the
+    # pretty ~/ display would degrade to an absolute path (and home-mode tests assert the ~/
+    # form). Resolving both sides is correct on all three platforms.
     try:
-        display = "~/" + memory_root.relative_to(Path.home()).as_posix()
+        display = "~/" + memory_root.relative_to(Path.home().resolve()).as_posix()
     except ValueError:
         display = memory_root.as_posix()
 
